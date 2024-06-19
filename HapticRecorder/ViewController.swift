@@ -6,7 +6,9 @@
 // haptics applied to the wheel and buttons
 // ALL ABOVE DONE 06/19
 // add files access to the buttons DONE 06/19
-// TO DO: change record to red when recording
+// change record to red when recording
+// recording now will start and stop with record button and can be stitched into a single track
+
 
 import UIKit
 import AVFoundation
