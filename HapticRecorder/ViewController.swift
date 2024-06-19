@@ -5,10 +5,12 @@
 // s will stop all record + p that is grayed out
 // haptics applied to the wheel and buttons
 // ALL ABOVE DONE 06/19
-// TO DO: add files access to the buttons
+// add files access to the buttons DONE 06/19
+// TO DO: change record to red when recording
 
 import UIKit
 import AVFoundation
+import MobileCoreServices
 
 class ViewController: UIViewController {
     
@@ -136,29 +138,73 @@ class ViewController: UIViewController {
     }
     
     func startRecording() {
-        guard audioRecorder?.isRecording == false else { return }
+        guard let recorder = audioRecorder else {
+            print("Audio recorder not initialized.")
+            return
+        }
         
-        do {
-            try AVAudioSession.sharedInstance().setActive(true)
-            audioRecorder?.record()
-            print("Recording started.")
-        } catch {
-            // Handle recording start error
-            print("Error starting recording: \(error.localizedDescription)")
+        if !recorder.isRecording {
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+                recorder.record()
+                print("Recording started.")
+            } catch {
+                // Handle recording start error
+                print("Error starting recording: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func pauseRecording() {
+        guard let recorder = audioRecorder else {
+            print("Audio recorder not initialized.")
+            return
+        }
+        
+        if recorder.isRecording {
+            recorder.pause()
+            print("Recording paused.")
+        }
+    }
+
+    func resumeRecording() {
+        guard let recorder = audioRecorder else {
+            print("Audio recorder not initialized.")
+            return
+        }
+        
+        if !recorder.isRecording {
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+                recorder.record()
+                print("Recording resumed.")
+            } catch {
+                // Handle recording resume error
+                print("Error resuming recording: \(error.localizedDescription)")
+            }
         }
     }
     
     func stopRecording() {
-        guard audioRecorder?.isRecording == true else { return }
+        guard let recorder = audioRecorder else {
+            print("Audio recorder not initialized.")
+            return
+        }
         
-        audioRecorder?.stop()
-        print("Recording stopped.")
-        
-        // Save audio file to Files app
-        let documentPicker = UIDocumentPickerViewController(forExporting: [audioURL!])
-        documentPicker.delegate = self
-        documentPicker.modalPresentationStyle = .formSheet
-        present(documentPicker, animated: true, completion: nil)
+        if recorder.isRecording {
+            recorder.stop()
+            print("Recording stopped.")
+            
+            if isButton1Active {
+                saveAudioToFilesApp()
+            }
+            
+            do {
+                try AVAudioSession.sharedInstance().setActive(false)
+            } catch {
+                print("Error deactivating audio session: \(error.localizedDescription)")
+            }
+        }
     }
 
     
@@ -170,17 +216,17 @@ class ViewController: UIViewController {
     }
     
     func startRotation() {
-        if !isRotating {
-            isRotating = true
-            rotationTimer = Timer.scheduledTimer(timeInterval: 0.01, target: self, selector: #selector(updateRotation), userInfo: nil, repeats: true)
+            if !isRotating {
+                isRotating = true
+                rotationTimer = Timer.scheduledTimer(timeInterval: 0.01, target: self, selector: #selector(updateRotation), userInfo: nil, repeats: true)
+            }
         }
-    }
-    
-    func stopRotation() {
-        isRotating = false
-        rotationTimer?.invalidate()
-        rotationTimer = nil
-    }
+        
+        func stopRotation() {
+            isRotating = false
+            rotationTimer?.invalidate()
+            rotationTimer = nil
+        }
     
     @objc func updateRotation() {
         guard !documentPickerActive else { return } // Prevent rotation when document picker is active
@@ -225,18 +271,17 @@ class ViewController: UIViewController {
             if isButton2Active {
                 isButton1Active.toggle()
                 updateButtonAppearance(button: button1, isActive: isButton1Active)
-                print("Button 1 (Record) tapped!")
-                provideButtonHapticFeedback()
+                updateRecordButtonColor()
                 
-                // Turn off other buttons
-                isButton3Active = false
-                updateButtonAppearance(button: button3, isActive: isButton3Active)
-                
-                // Start recording
-                startRecording()
-            } else {
-                print("Cannot record without Play active!")
-                // Optionally provide feedback or handle the case where Play is not active
+                if isButton1Active {
+                    if !audioRecorder!.isRecording {
+                        resumeRecording()
+                    } else {
+                        startRecording()
+                    }
+                } else {
+                    pauseRecording()
+                }
             }
             
         case button2:
@@ -266,10 +311,6 @@ class ViewController: UIViewController {
                 
                 // Stop rotation when stopping playback
                 stopRotation()
-                
-                // Turn off record button
-                isButton1Active = false
-                updateButtonAppearance(button: button1, isActive: isButton1Active)
                 
                 // Stop recording if it's active
                 stopRecording()
@@ -301,9 +342,13 @@ class ViewController: UIViewController {
         button.setTitleColor(.black, for: .normal)
         
         if button == button1 {
-            button.setTitleColor(isButton2Active ? .black : UIColor(red: 0.7, green: 0.7, blue: 0.7, alpha: 1.0), for: .normal) // Lighter gray for inactive state
-            button.isUserInteractionEnabled = isButton2Active
+            button.setTitleColor(isButton1Active && isButton2Active ? .red : UIColor(red: 0.7, green: 0.7, blue: 0.7, alpha: 1.0), for: .normal)
+            button.isUserInteractionEnabled = isButton2Active || isButton3Active
         }
+    }
+    
+    func updateRecordButtonColor() {
+        button1.setTitleColor(isButton1Active && isButton2Active ? .red : .black, for: .normal)
     }
     
     func provideButtonHapticFeedback() {
@@ -314,10 +359,6 @@ class ViewController: UIViewController {
     func provideContinuousCircleHapticFeedback(with velocity: CGPoint) {
         let intensity = abs(velocity.x / 275.0) // Adjust the divisor to control the sensitivity
         circleFeedbackGenerator.impactOccurred(intensity: intensity)
-    }
-    
-    deinit {
-        rotationTimer?.invalidate()
     }
 }
 
