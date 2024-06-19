@@ -8,7 +8,7 @@
 // add files access to the buttons DONE 06/19
 // change record to red when recording
 // recording now will start and stop with record button and can be stitched into a single track
-
+// double tapping the circle now opens files and allows user to select track
 
 import UIKit
 import AVFoundation
@@ -97,15 +97,19 @@ class ViewController: UIViewController {
         let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePanGesture(_:)))
         circleView.addGestureRecognizer(panGesture)
         
+        let doubleTapGesture = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
+        doubleTapGesture.numberOfTapsRequired = 2
+        circleView.addGestureRecognizer(doubleTapGesture)
+        
         // Prepare the haptic feedback generators
         circleFeedbackGenerator.prepare()
         buttonFeedbackGenerator.prepare()
         
         // Add version label
         let versionLabel = UILabel(frame: CGRect(x: view.bounds.width - 120, y: 20, width: 100, height: 30))
-        versionLabel.text = "v0.02 (spin logic update to buttons only, record button gray out)"
+        versionLabel.text = "v0.02"
         versionLabel.textColor = .black
-        versionLabel.font = UIFont.systemFont(ofSize: 10)
+        versionLabel.font = UIFont.systemFont(ofSize: 14)
         versionLabel.textAlignment = .right
         view.addSubview(versionLabel)
         
@@ -197,9 +201,18 @@ class ViewController: UIViewController {
             recorder.stop()
             print("Recording stopped.")
             
-            if isButton1Active {
-                saveAudioToFilesApp()
-            }
+            // Change button states after stopping recording
+            isButton1Active = false
+            updateButtonAppearance(button: button1, isActive: isButton1Active)
+            
+            isButton2Active = false
+            updateButtonAppearance(button: button2, isActive: isButton2Active)
+            
+            isButton3Active = false
+            updateButtonAppearance(button: button3, isActive: isButton3Active)
+            
+            // Prompt user to save recorded audio
+            saveAudioToFiles()
             
             do {
                 try AVAudioSession.sharedInstance().setActive(false)
@@ -209,8 +222,7 @@ class ViewController: UIViewController {
         }
     }
 
-    
-    func saveAudioToFilesApp() {
+    func saveAudioToFiles() {
         let documentPicker = UIDocumentPickerViewController(forExporting: [audioURL!])
         documentPicker.delegate = self
         documentPicker.modalPresentationStyle = .formSheet
@@ -218,27 +230,41 @@ class ViewController: UIViewController {
     }
     
     func startRotation() {
-            if !isRotating {
-                isRotating = true
-                rotationTimer = Timer.scheduledTimer(timeInterval: 0.01, target: self, selector: #selector(updateRotation), userInfo: nil, repeats: true)
-            }
+        if !isRotating {
+            isRotating = true
+            rotationTimer = Timer.scheduledTimer(timeInterval: 0.01, target: self, selector: #selector(updateRotation), userInfo: nil, repeats: true)
         }
-        
-        func stopRotation() {
-            isRotating = false
-            rotationTimer?.invalidate()
-            rotationTimer = nil
-        }
+    }
+            
+    func stopRotation() {
+        isRotating = false
+        rotationTimer?.invalidate()
+        rotationTimer = nil
+    }
     
     @objc func updateRotation() {
-        guard !documentPickerActive else { return } // Prevent rotation when document picker is active
-        
-        rotationAngle += rotationSpeed
-        if rotationAngle >= 360 {
-            rotationAngle = 0
+            guard !documentPickerActive else { return } // Prevent rotation when document picker is active
+            
+            rotationAngle += rotationSpeed
+            if rotationAngle >= 360 {
+                rotationAngle = 0
+            }
+            let rotation = CGAffineTransform(rotationAngle: rotationAngle * .pi / 180.0)
+            circleView.transform = rotation
         }
-        let rotation = CGAffineTransform(rotationAngle: rotationAngle * .pi / 180.0)
-        circleView.transform = rotation
+    
+    func openFiles() {
+        let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.audio])
+        documentPicker.delegate = self
+        documentPicker.modalPresentationStyle = .formSheet
+        present(documentPicker, animated: true, completion: nil)
+    }
+    
+    @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .ended, !isRotating else { return }
+        
+        // Handle double tap to open files
+        openFiles()
     }
     
     @objc func handlePanGesture(_ gesture: UIPanGestureRecognizer) {
@@ -368,18 +394,17 @@ extension ViewController: UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         if let pickedURL = urls.first {
             print("Picked document: \(pickedURL)")
-            // Handle saving confirmation or further actions
+            // Handle opening the track from pickedURL
+            // Example: You might want to load the track from this URL
             
-            // Reset document picker state
-            documentPickerActive = false
+            // Example: Display a message to the user indicating successful opening
+            let alertController = UIAlertController(title: "Track Opened", message: "Track opened successfully from \(pickedURL.lastPathComponent)", preferredStyle: .alert)
+            alertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+            present(alertController, animated: true, completion: nil)
         }
     }
     
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
         print("Document picker cancelled.")
-        // Handle cancellation if needed
-        
-        // Reset document picker state
-        documentPickerActive = false
     }
 }
