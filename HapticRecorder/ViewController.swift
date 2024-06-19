@@ -4,9 +4,11 @@
 // record is grayed out until p is pressed
 // s will stop all record + p that is grayed out
 // haptics applied to the wheel and buttons
+// ALL ABOVE DONE 06/19
 // TO DO: add files access to the buttons
 
 import UIKit
+import AVFoundation
 
 class ViewController: UIViewController {
     
@@ -26,10 +28,13 @@ class ViewController: UIViewController {
     var isButton2Active = false
     var isButton3Active = false
     
-    var isButton2Tapped = false
+    let circleFeedbackGenerator = UIImpactFeedbackGenerator(style: .heavy)
+    let buttonFeedbackGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
-    let circleFeedbackGenerator = UIImpactFeedbackGenerator(style: .heavy) // Feedback for circle (heavy style)
-    let buttonFeedbackGenerator = UIImpactFeedbackGenerator(style: .heavy) // Feedback for buttons (heavy style)
+    var audioRecorder: AVAudioRecorder?
+    var audioURL: URL?
+    
+    var documentPickerActive = false // Track if document picker is active
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -99,6 +104,69 @@ class ViewController: UIViewController {
         versionLabel.font = UIFont.systemFont(ofSize: 10)
         versionLabel.textAlignment = .right
         view.addSubview(versionLabel)
+        
+        // Setup audio recorder
+        setupAudioRecorder()
+    }
+    
+    func setupAudioRecorder() {
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            try audioSession.setCategory(.playAndRecord, mode: .default)
+            try audioSession.setActive(true)
+            
+            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let audioFileName = "recordedAudio.wav" // Adjust file format as needed
+            audioURL = documentsPath.appendingPathComponent(audioFileName)
+            
+            let audioSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatLinearPCM,
+                AVSampleRateKey: 44100.0,
+                AVNumberOfChannelsKey: 2,
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+            ]
+            
+            audioRecorder = try AVAudioRecorder(url: audioURL!, settings: audioSettings)
+            audioRecorder?.prepareToRecord()
+            
+        } catch {
+            // Handle audio session or recorder setup error
+            print("Error setting up audio session/recorder: \(error.localizedDescription)")
+        }
+    }
+    
+    func startRecording() {
+        guard audioRecorder?.isRecording == false else { return }
+        
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            audioRecorder?.record()
+            print("Recording started.")
+        } catch {
+            // Handle recording start error
+            print("Error starting recording: \(error.localizedDescription)")
+        }
+    }
+    
+    func stopRecording() {
+        guard audioRecorder?.isRecording == true else { return }
+        
+        audioRecorder?.stop()
+        print("Recording stopped.")
+        
+        // Save audio file to Files app
+        let documentPicker = UIDocumentPickerViewController(forExporting: [audioURL!])
+        documentPicker.delegate = self
+        documentPicker.modalPresentationStyle = .formSheet
+        present(documentPicker, animated: true, completion: nil)
+    }
+
+    
+    func saveAudioToFilesApp() {
+        let documentPicker = UIDocumentPickerViewController(forExporting: [audioURL!])
+        documentPicker.delegate = self
+        documentPicker.modalPresentationStyle = .formSheet
+        present(documentPicker, animated: true, completion: nil)
     }
     
     func startRotation() {
@@ -114,8 +182,9 @@ class ViewController: UIViewController {
         rotationTimer = nil
     }
     
-    
     @objc func updateRotation() {
+        guard !documentPickerActive else { return } // Prevent rotation when document picker is active
+        
         rotationAngle += rotationSpeed
         if rotationAngle >= 360 {
             rotationAngle = 0
@@ -125,6 +194,8 @@ class ViewController: UIViewController {
     }
     
     @objc func handlePanGesture(_ gesture: UIPanGestureRecognizer) {
+        guard !documentPickerActive else { return } // Prevent handling gestures when document picker is active
+        
         switch gesture.state {
         case .began:
             stopRotation()
@@ -145,8 +216,10 @@ class ViewController: UIViewController {
             break
         }
     }
-
+    
     @objc func buttonTapped(_ sender: UIButton) {
+        guard !documentPickerActive else { return } // Prevent button actions when document picker is active
+        
         switch sender {
         case button1:
             if isButton2Active {
@@ -158,9 +231,12 @@ class ViewController: UIViewController {
                 // Turn off other buttons
                 isButton3Active = false
                 updateButtonAppearance(button: button3, isActive: isButton3Active)
+                
+                // Start recording
+                startRecording()
             } else {
-                // Optionally provide feedback or handle the case where Play is not active
                 print("Cannot record without Play active!")
+                // Optionally provide feedback or handle the case where Play is not active
             }
             
         case button2:
@@ -194,6 +270,9 @@ class ViewController: UIViewController {
                 // Turn off record button
                 isButton1Active = false
                 updateButtonAppearance(button: button1, isActive: isButton1Active)
+                
+                // Stop recording if it's active
+                stopRecording()
             }
             
             // Turn off other buttons
@@ -209,7 +288,6 @@ class ViewController: UIViewController {
             break
         }
     }
-
     
     func updateButtonAppearance(button: UIButton, isActive: Bool) {
         if isActive {
@@ -227,7 +305,6 @@ class ViewController: UIViewController {
             button.isUserInteractionEnabled = isButton2Active
         }
     }
-
     
     func provideButtonHapticFeedback() {
         buttonFeedbackGenerator.prepare()
@@ -241,5 +318,25 @@ class ViewController: UIViewController {
     
     deinit {
         rotationTimer?.invalidate()
+    }
+}
+
+extension ViewController: UIDocumentPickerDelegate {
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        if let pickedURL = urls.first {
+            print("Picked document: \(pickedURL)")
+            // Handle saving confirmation or further actions
+            
+            // Reset document picker state
+            documentPickerActive = false
+        }
+    }
+    
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        print("Document picker cancelled.")
+        // Handle cancellation if needed
+        
+        // Reset document picker state
+        documentPickerActive = false
     }
 }
