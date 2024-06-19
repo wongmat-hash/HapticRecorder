@@ -1,3 +1,11 @@
+// this is version 0.02. It currently:
+// only spins wheel if p is pressed
+// gray is lighter gray on buttons
+// record is grayed out until p is pressed
+// s will stop all record + p that is grayed out
+// haptics applied to the wheel and buttons
+// TO DO: add files access to the buttons
+
 import UIKit
 
 class ViewController: UIViewController {
@@ -105,6 +113,7 @@ class ViewController: UIViewController {
         rotationTimer?.invalidate()
         rotationTimer = nil
     }
+    
     
     @objc func updateRotation() {
         rotationAngle += rotationSpeed
