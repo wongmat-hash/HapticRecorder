@@ -68,6 +68,17 @@ class ViewController: UIViewController {
         // Adjust the shift to the left
         let paddingToEdge: CGFloat = 40.0 // Extra space between last button and edge
         
+        // Audio meter view setup
+        let audioMeterHeight = buttonHeight
+        let audioMeterWidth: CGFloat = 10.0
+        let audioMeterX = paddingToEdge + 0.1
+        let audioMeterY = buttonY // Align audio meter with buttons
+        
+        let meterFrame = CGRect(x: audioMeterX - audioMeterWidth - 10.0, y: audioMeterY, width: audioMeterWidth, height: audioMeterHeight)
+        let meterView = AudioMeterView(frame: meterFrame, meterHeight: audioMeterHeight)
+        view.addSubview(meterView)
+        
+        // Button 1 setup
         button1 = UIButton(frame: CGRect(x: paddingToEdge, y: buttonY, width: buttonWidth, height: buttonHeight))
         updateButtonAppearance(button: button1, isActive: isButton1Active)
         button1.setTitle("R", for: .normal)
@@ -109,6 +120,53 @@ class ViewController: UIViewController {
         setupAudioRecorder()
     }
 
+
+
+
+    // Custom view for audio meter
+    class AudioMeterView: UIView {
+        
+        var level: CGFloat = 0.0 {
+            didSet {
+                setNeedsDisplay()
+            }
+        }
+        
+        var meterHeight: CGFloat = 0.0 // Height of the meter
+        
+        convenience init(frame: CGRect, meterHeight: CGFloat) {
+            self.init(frame: frame)
+            self.meterHeight = meterHeight
+        }
+        
+        override func draw(_ rect: CGRect) {
+            super.draw(rect)
+            
+            let meterPath = UIBezierPath()
+            let meterWidth = rect.width
+            let meterX = rect.minX
+            let meterY = rect.minY
+            
+            // Draw meter background
+            UIColor.lightGray.setFill()
+            meterPath.move(to: CGPoint(x: meterX, y: meterY))
+            meterPath.addLine(to: CGPoint(x: meterX + meterWidth, y: meterY))
+            meterPath.addLine(to: CGPoint(x: meterX + meterWidth, y: meterY + meterHeight))
+            meterPath.addLine(to: CGPoint(x: meterX, y: meterY + meterHeight))
+            meterPath.close()
+            meterPath.fill()
+            
+            // Draw meter level
+            let levelHeight = meterHeight * (1 - level)
+            UIColor.green.setFill()
+            meterPath.move(to: CGPoint(x: meterX, y: meterY + meterHeight))
+            meterPath.addLine(to: CGPoint(x: meterX + meterWidth, y: meterY + meterHeight))
+            meterPath.addLine(to: CGPoint(x: meterX + meterWidth, y: meterY + levelHeight))
+            meterPath.addLine(to: CGPoint(x: meterX, y: meterY + levelHeight))
+            meterPath.close()
+            meterPath.fill()
+        }
+    }
 
 
 
