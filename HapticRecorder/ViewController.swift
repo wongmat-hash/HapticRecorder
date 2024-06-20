@@ -1,19 +1,3 @@
-// this is version 0.02. It currently:
-// only spins wheel if p is pressed
-// gray is lighter gray on buttons
-// record is grayed out until p is pressed
-// s will stop all record + p that is grayed out
-// haptics applied to the wheel and buttons
-// ALL ABOVE DONE 06/19
-// add files access to the buttons DONE 06/19
-// change record to red when recording
-// recording now will start and stop with record button and can be stitched into a single track
-// double tapping the circle now opens files and allows user to select track
-
-// figure out timecode
-// load track and allow scrubbing
-// warble sound
-
 import UIKit
 import AVFoundation
 import MobileCoreServices
@@ -62,7 +46,7 @@ class ViewController: UIViewController {
         
         let squareSize: CGFloat = circleDiameter * 0.1
         squareView = UIView(frame: CGRect(x: 0, y: 0, width: squareSize, height: squareSize))
-        squareView.center = CGPoint(x: circleDiameter / 2, y: circleDiameter / 2)
+        squareView.center = CGPoint(x: circleView.bounds.midX, y: circleView.bounds.midY)
         squareView.backgroundColor = .white
         squareView.layer.borderWidth = 2.0
         squareView.layer.borderColor = UIColor.black.cgColor
@@ -71,28 +55,32 @@ class ViewController: UIViewController {
         
         let dotSize: CGFloat = squareSize * 0.1
         dotView = UIView(frame: CGRect(x: 0, y: 0, width: dotSize, height: dotSize))
-        dotView.center = CGPoint(x: squareSize / 2, y: squareSize / 2)
+        dotView.center = CGPoint(x: squareView.bounds.midX, y: squareView.bounds.midY)
         dotView.backgroundColor = .black
         dotView.layer.cornerRadius = dotSize / 2
         squareView.addSubview(dotView)
         
-        let buttonWidth = view.bounds.width / 3.0
+        // Calculate button sizes and positions
+        let buttonWidth = (view.bounds.width * 0.9) / 3.0 // Equal width for 1x3 buttons
         let buttonHeight = (view.bounds.height - circleView.frame.maxY - 20.0)
         let buttonY = circleView.frame.maxY + 20.0
         
-        button1 = UIButton(frame: CGRect(x: 0, y: buttonY, width: buttonWidth, height: buttonHeight))
+        // Adjust the shift to the left
+        let paddingToEdge: CGFloat = 40.0 // Extra space between last button and edge
+        
+        button1 = UIButton(frame: CGRect(x: paddingToEdge, y: buttonY, width: buttonWidth, height: buttonHeight))
         updateButtonAppearance(button: button1, isActive: isButton1Active)
         button1.setTitle("R", for: .normal)
         button1.addTarget(self, action: #selector(buttonTapped(_:)), for: .touchUpInside)
         view.addSubview(button1)
         
-        button2 = UIButton(frame: CGRect(x: buttonWidth, y: buttonY, width: buttonWidth, height: buttonHeight))
+        button2 = UIButton(frame: CGRect(x: button1.frame.maxX, y: buttonY, width: buttonWidth, height: buttonHeight))
         updateButtonAppearance(button: button2, isActive: isButton2Active)
         button2.setTitle("P", for: .normal)
         button2.addTarget(self, action: #selector(buttonTapped(_:)), for: .touchUpInside)
         view.addSubview(button2)
         
-        button3 = UIButton(frame: CGRect(x: buttonWidth * 2, y: buttonY, width: buttonWidth, height: buttonHeight))
+        button3 = UIButton(frame: CGRect(x: button2.frame.maxX, y: buttonY, width: buttonWidth, height: buttonHeight))
         updateButtonAppearance(button: button3, isActive: isButton3Active)
         button3.setTitle("S", for: .normal)
         button3.addTarget(self, action: #selector(buttonTapped(_:)), for: .touchUpInside)
@@ -120,6 +108,10 @@ class ViewController: UIViewController {
         // Setup audio recorder
         setupAudioRecorder()
     }
+
+
+
+
     
     func setupAudioRecorder() {
         let audioSession = AVAudioSession.sharedInstance()
