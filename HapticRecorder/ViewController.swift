@@ -10,6 +10,10 @@
 // recording now will start and stop with record button and can be stitched into a single track
 // double tapping the circle now opens files and allows user to select track
 
+// figure out timecode
+// load track and allow scrubbing
+// warble sound
+
 import UIKit
 import AVFoundation
 import MobileCoreServices
@@ -397,10 +401,12 @@ extension ViewController: UIDocumentPickerDelegate {
             // Handle opening the track from pickedURL
             // Example: You might want to load the track from this URL
             
-            // Example: Display a message to the user indicating successful opening
-            let alertController = UIAlertController(title: "Track Opened", message: "Track opened successfully from \(pickedURL.lastPathComponent)", preferredStyle: .alert)
-            alertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-            present(alertController, animated: true, completion: nil)
+            // Display a message only if a track is opened, not when saving
+            if controller.documentPickerMode == .open {
+                let alertController = UIAlertController(title: "Track Opened", message: "Track opened successfully from \(pickedURL.lastPathComponent)", preferredStyle: .alert)
+                alertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+                present(alertController, animated: true, completion: nil)
+            }
         }
     }
     
