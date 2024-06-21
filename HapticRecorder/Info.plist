@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>We need access to your microphone to record audio.</string>
+	<string>This app needs access to the microphone for recording audio.</string>
 	<key>NSAppUsesRecordingPermission</key>
 	<string>YES</string>
 	<key>NSHapticFeedbackUsageDescription</key>

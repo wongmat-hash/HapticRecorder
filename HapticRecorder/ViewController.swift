@@ -35,6 +35,11 @@ class ViewController: UIViewController {
     var audioRecorder: AVAudioRecorder?
     var audioURL: URL?
     
+    // Timer elements
+    var elapsedTimeLabel: UILabel!
+    var recordingTimer: Timer?
+    var elapsedTime: TimeInterval = 0
+    
     // Document Picker
     var documentPickerActive = false // Track if document picker is active
 
@@ -44,8 +49,8 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         
         view.backgroundColor = .white
-        
         setupCircleView()
+        setupElapsedTimeLabel()
         setupButtons()
         setupGestures()
         setupVersionLabel()
@@ -53,7 +58,6 @@ class ViewController: UIViewController {
         // Setup audio recorder
         setupAudioRecorder()
     }
-    
     // MARK: - Setup Methods
 
     private func setupCircleView() {
@@ -166,55 +170,91 @@ class ViewController: UIViewController {
             print("Error setting up audio session/recorder: \(error.localizedDescription)")
         }
     }
+    // MARK: - Setup Timer
+    private func setupElapsedTimeLabel() {
+        // Calculate the centerY position above the circle
+        let centerY = circleView.frame.minY - 50.0 // Adjust the vertical offset as needed
+        
+        // Position the label centered horizontally and above the circle
+        elapsedTimeLabel = UILabel(frame: CGRect(x: 20, y: centerY, width: view.bounds.width - 40, height: 40))
+        elapsedTimeLabel.font = UIFont.systemFont(ofSize: 24)
+        elapsedTimeLabel.textColor = .black
+        elapsedTimeLabel.textAlignment = .center
+        elapsedTimeLabel.text = "00:00:00"
+        view.addSubview(elapsedTimeLabel)
+    }
 
+    // Update Timer
+    func updateElapsedTimeLabel() {
+        let hours = Int(elapsedTime) / 3600
+        let minutes = (Int(elapsedTime) % 3600) / 60
+        let seconds = Int(elapsedTime) % 60
+        elapsedTimeLabel.text = String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+    }
+    func startTimer() {
+        if recordingTimer == nil {
+            recordingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                self?.elapsedTime += 1
+                self?.updateElapsedTimeLabel()
+            }
+        }
+    }
+
+    func stopTimer() {
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+    }
+
+    func resetTimer() {
+        elapsedTime = 0
+        updateElapsedTimeLabel()
+    }
     // MARK: - Audio Recording Methods
 
     func startRecording() {
-        // Starts audio recording if recorder is initialized and not currently recording
         guard let recorder = audioRecorder else {
             print("Audio recorder not initialized.")
             return
         }
-        
+
         if !recorder.isRecording {
             do {
                 try AVAudioSession.sharedInstance().setActive(true)
                 recorder.record()
                 print("Recording started.")
+                startTimer()
             } catch {
-                // Handle recording start error
                 print("Error starting recording: \(error.localizedDescription)")
             }
         }
     }
 
     func pauseRecording() {
-        // Pauses audio recording if recorder is initialized and currently recording
         guard let recorder = audioRecorder else {
             print("Audio recorder not initialized.")
             return
         }
-        
+
         if recorder.isRecording {
             recorder.pause()
             print("Recording paused.")
+            stopTimer()
         }
     }
 
     func resumeRecording() {
-        // Resumes audio recording if recorder is initialized and recording is paused
         guard let recorder = audioRecorder else {
             print("Audio recorder not initialized.")
             return
         }
-        
+
         if !recorder.isRecording {
             do {
                 try AVAudioSession.sharedInstance().setActive(true)
                 recorder.record()
                 print("Recording resumed.")
+                startTimer()
             } catch {
-                // Handle recording resume error
                 print("Error resuming recording: \(error.localizedDescription)")
             }
         }
@@ -231,7 +271,8 @@ class ViewController: UIViewController {
             if recorder.isRecording {
                 recorder.stop()
                 print("Recording stopped.")
-                
+                stopTimer()
+                resetTimer()
                 // Change button states after stopping recording
                 isButton1Active = false
                 updateButtonAppearance(button: button1, isActive: isButton1Active)
