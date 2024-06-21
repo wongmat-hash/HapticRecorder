@@ -260,7 +260,7 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
     // MARK: - Audio Level Meter
     private func setupAudioLevelMeter() {
         // Calculate meter dimensions and position
-        let meterWidth: CGFloat = 150
+        let meterWidth: CGFloat = 40
         let paddingFromLeft: CGFloat = 0
         let paddingFromBottom: CGFloat = 0
         let cornerRadius: CGFloat = 5 // Adjust as needed
@@ -666,20 +666,19 @@ class AudioMeterView: UIView {
 }
 
 // MARK: - Dual Channel Audio Level Meter
-import UIKit
-
 class DualChannelAudioLevelMeter: UIView {
     private var leftLevel: CGFloat = 0.0
     private var rightLevel: CGFloat = 0.0
-    
+
     private let numberOfSegments: Int = 20 // Number of segments for each meter
 
     func setLevels(left: CGFloat, right: CGFloat) {
-        self.leftLevel = left
-        self.rightLevel = right
+        // Ensure levels are within 0 to 1 range
+        self.leftLevel = max(0.0, min(1.0, left))
+        self.rightLevel = max(0.0, min(1.0, right))
         setNeedsDisplay() // Request a redraw
     }
-    
+
     override func draw(_ rect: CGRect) {
         guard let context = UIGraphicsGetCurrentContext() else { return }
         context.clear(rect)
@@ -687,12 +686,12 @@ class DualChannelAudioLevelMeter: UIView {
         let segmentWidth = rect.width / 2
         let segmentHeight = rect.height / CGFloat(numberOfSegments)
 
-        // Draw left channel in shades of green (darker)
+        // Draw left channel in shades of yellow
         for i in 0..<numberOfSegments {
             let y = rect.height - CGFloat(i + 1) * segmentHeight
             let colorIntensity = CGFloat(i) / CGFloat(numberOfSegments)
-            let color = UIColor(red: 0, green: colorIntensity * 0.5, blue: 0, alpha: 1.0) // Darker green shades
-            
+            let color = UIColor(red: 1.0, green: colorIntensity, blue: 0.0, alpha: 1.0) // Yellow shades
+
             color.setFill()
             if CGFloat(i) / CGFloat(numberOfSegments) < leftLevel {
                 let barRect = CGRect(x: 0, y: y, width: segmentWidth, height: segmentHeight)
@@ -700,12 +699,12 @@ class DualChannelAudioLevelMeter: UIView {
             }
         }
 
-        // Draw right channel in shades of green (lighter)
+        // Draw right channel in shades of green
         for i in 0..<numberOfSegments {
             let y = rect.height - CGFloat(i + 1) * segmentHeight
             let colorIntensity = CGFloat(i) / CGFloat(numberOfSegments)
-            let color = UIColor(red: 0, green: colorIntensity, blue: 0, alpha: 1.0) // Lighter green shades
-            
+            let color = UIColor(red: 0.0, green: colorIntensity * 0.5, blue: 0.0, alpha: 1.0) // Green shades
+
             color.setFill()
             if CGFloat(i) / CGFloat(numberOfSegments) < rightLevel {
                 let barRect = CGRect(x: segmentWidth, y: y, width: segmentWidth, height: segmentHeight)
