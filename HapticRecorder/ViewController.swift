@@ -259,16 +259,30 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
     
     // MARK: - Audio Level Meter
     private func setupAudioLevelMeter() {
-        // Position and size the meter between the left edge and the record button
+        // Calculate meter dimensions and position
         let meterWidth: CGFloat = 150
-        let meterHeight: CGFloat = 200
-        let meterX: CGFloat = 20
-        let meterY: CGFloat = view.bounds.midY - meterHeight / 2
+        let paddingFromLeft: CGFloat = 0
+        let paddingFromBottom: CGFloat = 0
+        let cornerRadius: CGFloat = 5 // Adjust as needed
+        
+        // Calculate x-position based on button1's frame
+        let meterX: CGFloat = button1.frame.minX - meterWidth - paddingFromLeft
+        
+        // Calculate y-position and height based on screen height and button1's position
+        let screenHeight = view.frame.height
+        let meterHeight = screenHeight - button1.frame.minY - paddingFromBottom
+        
+        // Calculate y-position based on button1's top edge
+        let meterY: CGFloat = button1.frame.minY
         
         audioLevelMeter = DualChannelAudioLevelMeter(frame: CGRect(x: meterX, y: meterY, width: meterWidth, height: meterHeight))
+        audioLevelMeter.layer.cornerRadius = cornerRadius
+        audioLevelMeter.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner] // Round top left and top right corners
+        audioLevelMeter.clipsToBounds = true // Ensure content does not exceed rounded corners
         view.addSubview(audioLevelMeter)
     }
-    
+
+
     // MARK: - AVAudioRecorderDelegate
         
         func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
@@ -652,11 +666,13 @@ class AudioMeterView: UIView {
 }
 
 // MARK: - Dual Channel Audio Level Meter
+import UIKit
+
 class DualChannelAudioLevelMeter: UIView {
     private var leftLevel: CGFloat = 0.0
     private var rightLevel: CGFloat = 0.0
     
-    private let numberOfSegments: Int = 20 // You can adjust this for more or fewer segments
+    private let numberOfSegments: Int = 20 // Number of segments for each meter
 
     func setLevels(left: CGFloat, right: CGFloat) {
         self.leftLevel = left
@@ -671,11 +687,11 @@ class DualChannelAudioLevelMeter: UIView {
         let segmentWidth = rect.width / 2
         let segmentHeight = rect.height / CGFloat(numberOfSegments)
 
-        // Draw left channel in green
+        // Draw left channel in shades of green (darker)
         for i in 0..<numberOfSegments {
             let y = rect.height - CGFloat(i + 1) * segmentHeight
             let colorIntensity = CGFloat(i) / CGFloat(numberOfSegments)
-            let color = UIColor(red: 0, green: colorIntensity, blue: 0, alpha: 1.0) // Shades of green
+            let color = UIColor(red: 0, green: colorIntensity * 0.5, blue: 0, alpha: 1.0) // Darker green shades
             
             color.setFill()
             if CGFloat(i) / CGFloat(numberOfSegments) < leftLevel {
@@ -684,11 +700,11 @@ class DualChannelAudioLevelMeter: UIView {
             }
         }
 
-        // Draw right channel in green
+        // Draw right channel in shades of green (lighter)
         for i in 0..<numberOfSegments {
             let y = rect.height - CGFloat(i + 1) * segmentHeight
             let colorIntensity = CGFloat(i) / CGFloat(numberOfSegments)
-            let color = UIColor(red: 0, green: colorIntensity, blue: 0, alpha: 1.0) // Shades of green
+            let color = UIColor(red: 0, green: colorIntensity, blue: 0, alpha: 1.0) // Lighter green shades
             
             color.setFill()
             if CGFloat(i) / CGFloat(numberOfSegments) < rightLevel {
