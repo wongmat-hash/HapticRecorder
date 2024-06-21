@@ -96,6 +96,7 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
                 squareView.addSubview(dotView)
     }
     
+    //MARK: - Button Setup
     private func setupButtons() {
         // Sets up buttons for Record, Play, and Stop functionalities
         // Configures button appearance based on state (active/inactive)
@@ -124,7 +125,34 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
         button3.addTarget(self, action: #selector(buttonTapped(_:)), for: .touchUpInside)
         view.addSubview(button3)
     }
+    // MARK: - Circle Rotation Control
+    func startRotation() {
+        // Starts rotating the circle view continuously
+        if !isRotating {
+            isRotating = true
+            rotationTimer = Timer.scheduledTimer(timeInterval: 0.01, target: self, selector: #selector(updateRotation), userInfo: nil, repeats: true)
+        }
+    }
+            
+    func stopRotation() {
+        // Stops rotating the circle view
+        isRotating = false
+        rotationTimer?.invalidate()
+        rotationTimer = nil
+    }
     
+    @objc func updateRotation() {
+        // Updates the rotation angle of the circle view
+        guard !documentPickerActive else { return } // Prevent rotation when document picker is active
+        
+        rotationAngle += rotationSpeed
+        if rotationAngle >= 360 {
+            rotationAngle = 0
+        }
+        let rotation = CGAffineTransform(rotationAngle: rotationAngle * .pi / 180.0)
+        circleView.transform = rotation
+    }
+    //MARK: - Gesture Setup
     private func setupGestures() {
         // Sets up gestures (pan and double tap) for the circle view
         // Manages gesture interactions and haptic feedback
@@ -138,7 +166,32 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
         circleFeedbackGenerator.prepare()
         buttonFeedbackGenerator.prepare()
     }
-    
+    // MARK: - Gesture Recognizers
+    @objc func handlePanGesture(_ gesture: UIPanGestureRecognizer) {
+        // Handles pan gesture on circle view to rotate it
+        guard !documentPickerActive else { return } // Prevent handling gestures when document picker is active
+                
+        switch gesture.state {
+        case .began:
+            stopRotation()
+            provideContinuousCircleHapticFeedback(with: gesture.velocity(in: circleView))
+        case .changed:
+            let translation = gesture.translation(in: circleView)
+            let angleOffset = translation.x / circleView.bounds.width * 360.0
+            rotationAngle += angleOffset
+            let rotation = CGAffineTransform(rotationAngle: rotationAngle * .pi / 180.0)
+            circleView.transform = rotation
+            gesture.setTranslation(.zero, in: circleView)
+            provideContinuousCircleHapticFeedback(with: gesture.velocity(in: circleView))
+        case .ended, .cancelled, .failed:
+            if isButton2Active {
+                startRotation()
+            }
+        default:
+            break
+        }
+    }
+    // MARK: - VER. Setup
     private func setupVersionLabel() {
         // Add version label
         let versionLabel = UILabel(frame: CGRect(x: view.bounds.width - 120, y: 20, width: 100, height: 30))
@@ -149,6 +202,7 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
         view.addSubview(versionLabel)
     }
     
+    //MARK: - Setup Audio Recorder
     private func setupAudioRecorder() {
         // Configures audio session and recorder settings
         // Handles errors during audio setup
@@ -181,7 +235,7 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
         }
     }
     
-    //MARK: - AUDIO LEVEL SETUP
+    //MARK: - Audio level updater
     private func startUpdatingLevels() {
         levelTimer = Timer.scheduledTimer(timeInterval: 0.05, target: self, selector: #selector(updateAudioLevels), userInfo: nil, repeats: true)
     }
@@ -198,7 +252,6 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
         audioLevelMeter.setLevels(left: leftChannelLevel, right: rightChannelLevel)
     }
 
-    
     private func levelFromPower(power: Float) -> CGFloat {
         // Typical range is from -80 dB to 0 dB
         let minDb: Float = -80.0
@@ -217,7 +270,81 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
         return paths[0]
     }
-    // MARK: - Setup Timer
+    
+    // MARK: - Audio Level Meter
+    private func setupAudioLevelMeter() {
+        // Calculate meter dimensions and position
+        let meterWidth: CGFloat = 40
+        let paddingFromLeft: CGFloat = 0
+        let paddingFromBottom: CGFloat = 0
+        let cornerRadius: CGFloat = 5 // Adjust as needed
+        
+        // Calculate x-position based on button1's frame
+        let meterX: CGFloat = button1.frame.minX - meterWidth - paddingFromLeft
+        
+        // Calculate y-position and height based on screen height and button1's position
+        let screenHeight = view.frame.height
+        let meterHeight = screenHeight - button1.frame.minY - paddingFromBottom
+        
+        // Calculate y-position based on button1's top edge
+        let meterY: CGFloat = button1.frame.minY
+        
+        audioLevelMeter = DualChannelAudioLevelMeter(frame: CGRect(x: meterX, y: meterY, width: meterWidth, height: meterHeight))
+        audioLevelMeter.layer.cornerRadius = cornerRadius
+        audioLevelMeter.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner] // Round top left and top right corners
+        audioLevelMeter.clipsToBounds = true // Ensure content does not exceed rounded corners
+        view.addSubview(audioLevelMeter)
+    }
+    
+    // MARK: - Dual Channel Audio Level Meter
+    class DualChannelAudioLevelMeter: UIView {
+        private var leftLevel: CGFloat = 0.0
+        private var rightLevel: CGFloat = 0.0
+
+        private let numberOfSegments: Int = 20 // Number of segments for each meter
+
+        func setLevels(left: CGFloat, right: CGFloat) {
+            // Ensure levels are within 0 to 1 range
+            self.leftLevel = max(0.0, min(1.0, left))
+            self.rightLevel = max(0.0, min(1.0, right))
+            setNeedsDisplay() // Request a redraw
+        }
+
+        override func draw(_ rect: CGRect) {
+            guard let context = UIGraphicsGetCurrentContext() else { return }
+            context.clear(rect)
+
+            let segmentWidth = rect.width / 2
+            let segmentHeight = rect.height / CGFloat(numberOfSegments)
+
+            // Draw left channel in shades of yellow
+            for i in 0..<numberOfSegments {
+                let y = rect.height - CGFloat(i + 1) * segmentHeight
+                let colorIntensity = CGFloat(i) / CGFloat(numberOfSegments)
+                let color = UIColor(red: 1.0, green: colorIntensity, blue: 0.0, alpha: 1.0) // Yellow shades
+
+                color.setFill()
+                if CGFloat(i) / CGFloat(numberOfSegments) < leftLevel {
+                    let barRect = CGRect(x: 0, y: y, width: segmentWidth, height: segmentHeight)
+                    context.fill(barRect)
+                }
+            }
+
+            // Draw right channel in shades of green
+            for i in 0..<numberOfSegments {
+                let y = rect.height - CGFloat(i + 1) * segmentHeight
+                let colorIntensity = CGFloat(i) / CGFloat(numberOfSegments)
+                let color = UIColor(red: 0.0, green: colorIntensity * 0.5, blue: 0.0, alpha: 1.0) // Green shades
+
+                color.setFill()
+                if CGFloat(i) / CGFloat(numberOfSegments) < rightLevel {
+                    let barRect = CGRect(x: segmentWidth, y: y, width: segmentWidth, height: segmentHeight)
+                    context.fill(barRect)
+                }
+            }
+        }
+    }
+    // MARK: - Timer Setup
     private func setupElapsedTimeLabel() {
         // Calculate the centerY position above the circle
         let centerY = circleView.frame.minY - 50.0 // Adjust the vertical offset as needed
@@ -256,33 +383,15 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
         elapsedTime = 0
         updateElapsedTimeLabel()
     }
-    
-    // MARK: - Audio Level Meter
-    private func setupAudioLevelMeter() {
-        // Calculate meter dimensions and position
-        let meterWidth: CGFloat = 40
-        let paddingFromLeft: CGFloat = 0
-        let paddingFromBottom: CGFloat = 0
-        let cornerRadius: CGFloat = 5 // Adjust as needed
-        
-        // Calculate x-position based on button1's frame
-        let meterX: CGFloat = button1.frame.minX - meterWidth - paddingFromLeft
-        
-        // Calculate y-position and height based on screen height and button1's position
-        let screenHeight = view.frame.height
-        let meterHeight = screenHeight - button1.frame.minY - paddingFromBottom
-        
-        // Calculate y-position based on button1's top edge
-        let meterY: CGFloat = button1.frame.minY
-        
-        audioLevelMeter = DualChannelAudioLevelMeter(frame: CGRect(x: meterX, y: meterY, width: meterWidth, height: meterHeight))
-        audioLevelMeter.layer.cornerRadius = cornerRadius
-        audioLevelMeter.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner] // Round top left and top right corners
-        audioLevelMeter.clipsToBounds = true // Ensure content does not exceed rounded corners
-        view.addSubview(audioLevelMeter)
+    // MARK: - Timer Color Change Methods
+
+    private func setTimecodeColorToRed() {
+        elapsedTimeLabel.textColor = .red
     }
 
-
+    private func setTimecodeColorToBlack() {
+        elapsedTimeLabel.textColor = .black
+    }
     // MARK: - AVAudioRecorderDelegate
         
         func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
@@ -300,16 +409,6 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
                 print("Recording error occurred: \(error)")
             }
         }
-
-    // MARK: - Color Change Methods
-
-    private func setTimecodeColorToRed() {
-        elapsedTimeLabel.textColor = .red
-    }
-
-    private func setTimecodeColorToBlack() {
-        elapsedTimeLabel.textColor = .black
-    }
 
     // MARK: - Audio Recording Methods
 
@@ -408,37 +507,7 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
         present(documentPicker, animated: true, completion: nil)
     }
 
-    // MARK: - Rotation Control
-
-    func startRotation() {
-        // Starts rotating the circle view continuously
-        if !isRotating {
-            isRotating = true
-            rotationTimer = Timer.scheduledTimer(timeInterval: 0.01, target: self, selector: #selector(updateRotation), userInfo: nil, repeats: true)
-        }
-    }
-            
-    func stopRotation() {
-        // Stops rotating the circle view
-        isRotating = false
-        rotationTimer?.invalidate()
-        rotationTimer = nil
-    }
-    
-    @objc func updateRotation() {
-        // Updates the rotation angle of the circle view
-        guard !documentPickerActive else { return } // Prevent rotation when document picker is active
-        
-        rotationAngle += rotationSpeed
-        if rotationAngle >= 360 {
-            rotationAngle = 0
-        }
-        let rotation = CGAffineTransform(rotationAngle: rotationAngle * .pi / 180.0)
-        circleView.transform = rotation
-    }
-
-    // MARK: - Document Picker
-
+    // MARK: - Document Picker <<INCOMPLETE>>
     func openFiles() {
         // Presents document picker for opening audio files
         let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.audio])
@@ -454,36 +523,9 @@ class ViewController: UIViewController, AVAudioRecorderDelegate {
         // Handle double tap to open files
         openFiles()
     }
-    
-    // MARK: - Gesture Recognizers
 
-    @objc func handlePanGesture(_ gesture: UIPanGestureRecognizer) {
-        // Handles pan gesture on circle view to rotate it
-        guard !documentPickerActive else { return } // Prevent handling gestures when document picker is active
-                
-        switch gesture.state {
-        case .began:
-            stopRotation()
-            provideContinuousCircleHapticFeedback(with: gesture.velocity(in: circleView))
-        case .changed:
-            let translation = gesture.translation(in: circleView)
-            let angleOffset = translation.x / circleView.bounds.width * 360.0
-            rotationAngle += angleOffset
-            let rotation = CGAffineTransform(rotationAngle: rotationAngle * .pi / 180.0)
-            circleView.transform = rotation
-            gesture.setTranslation(.zero, in: circleView)
-            provideContinuousCircleHapticFeedback(with: gesture.velocity(in: circleView))
-        case .ended, .cancelled, .failed:
-            if isButton2Active {
-                startRotation()
-            }
-        default:
-            break
-        }
-    }
     
     // MARK: - Button Actions
-
     @objc func buttonTapped(_ sender: UIButton) {
         // Handles tap events for Record, Play, and Stop buttons
         // Updates button states and performs corresponding actions
@@ -665,51 +707,4 @@ class AudioMeterView: UIView {
     }
 }
 
-// MARK: - Dual Channel Audio Level Meter
-class DualChannelAudioLevelMeter: UIView {
-    private var leftLevel: CGFloat = 0.0
-    private var rightLevel: CGFloat = 0.0
 
-    private let numberOfSegments: Int = 20 // Number of segments for each meter
-
-    func setLevels(left: CGFloat, right: CGFloat) {
-        // Ensure levels are within 0 to 1 range
-        self.leftLevel = max(0.0, min(1.0, left))
-        self.rightLevel = max(0.0, min(1.0, right))
-        setNeedsDisplay() // Request a redraw
-    }
-
-    override func draw(_ rect: CGRect) {
-        guard let context = UIGraphicsGetCurrentContext() else { return }
-        context.clear(rect)
-
-        let segmentWidth = rect.width / 2
-        let segmentHeight = rect.height / CGFloat(numberOfSegments)
-
-        // Draw left channel in shades of yellow
-        for i in 0..<numberOfSegments {
-            let y = rect.height - CGFloat(i + 1) * segmentHeight
-            let colorIntensity = CGFloat(i) / CGFloat(numberOfSegments)
-            let color = UIColor(red: 1.0, green: colorIntensity, blue: 0.0, alpha: 1.0) // Yellow shades
-
-            color.setFill()
-            if CGFloat(i) / CGFloat(numberOfSegments) < leftLevel {
-                let barRect = CGRect(x: 0, y: y, width: segmentWidth, height: segmentHeight)
-                context.fill(barRect)
-            }
-        }
-
-        // Draw right channel in shades of green
-        for i in 0..<numberOfSegments {
-            let y = rect.height - CGFloat(i + 1) * segmentHeight
-            let colorIntensity = CGFloat(i) / CGFloat(numberOfSegments)
-            let color = UIColor(red: 0.0, green: colorIntensity * 0.5, blue: 0.0, alpha: 1.0) // Green shades
-
-            color.setFill()
-            if CGFloat(i) / CGFloat(numberOfSegments) < rightLevel {
-                let barRect = CGRect(x: segmentWidth, y: y, width: segmentWidth, height: segmentHeight)
-                context.fill(barRect)
-            }
-        }
-    }
-}
