@@ -209,6 +209,17 @@ class ViewController: UIViewController {
         elapsedTime = 0
         updateElapsedTimeLabel()
     }
+    
+    // MARK: - Color Change Methods
+
+    private func setTimecodeColorToRed() {
+        elapsedTimeLabel.textColor = .red
+    }
+
+    private func setTimecodeColorToBlack() {
+        elapsedTimeLabel.textColor = .black
+    }
+
     // MARK: - Audio Recording Methods
 
     func startRecording() {
@@ -223,6 +234,7 @@ class ViewController: UIViewController {
                 recorder.record()
                 print("Recording started.")
                 startTimer()
+                setTimecodeColorToRed() // Change color to red when recording
             } catch {
                 print("Error starting recording: \(error.localizedDescription)")
             }
@@ -239,6 +251,7 @@ class ViewController: UIViewController {
             recorder.pause()
             print("Recording paused.")
             stopTimer()
+            setTimecodeColorToBlack() // Change color to black when paused
         }
     }
 
@@ -254,6 +267,7 @@ class ViewController: UIViewController {
                 recorder.record()
                 print("Recording resumed.")
                 startTimer()
+                setTimecodeColorToRed() // Change color to red when recording
             } catch {
                 print("Error resuming recording: \(error.localizedDescription)")
             }
@@ -272,6 +286,7 @@ class ViewController: UIViewController {
                 recorder.stop()
                 print("Recording stopped.")
                 stopTimer()
+                setTimecodeColorToBlack() // Change color to black when paused
                 resetTimer()
                 // Change button states after stopping recording
                 isButton1Active = false
