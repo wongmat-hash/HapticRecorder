@@ -2,7 +2,7 @@ import UIKit
 import AVFoundation
 import MobileCoreServices
 
-class ViewController: UIViewController {
+class ViewController: UIViewController, AVAudioRecorderDelegate {
 
     // MARK: - Properties
 
@@ -40,6 +40,12 @@ class ViewController: UIViewController {
     var recordingTimer: Timer?
     var elapsedTime: TimeInterval = 0
     
+    // Properties and views
+    var audioLevelMeter: DualChannelAudioLevelMeter!
+    var levelTimer: Timer?
+
+    var sensitivity: Float = 1.0 // Initial sensitivity value
+    
     // Document Picker
     var documentPickerActive = false // Track if document picker is active
 
@@ -54,7 +60,7 @@ class ViewController: UIViewController {
         setupButtons()
         setupGestures()
         setupVersionLabel()
-        
+        setupAudioLevelMeter()
         // Setup audio recorder
         setupAudioRecorder()
     }
@@ -136,7 +142,7 @@ class ViewController: UIViewController {
     private func setupVersionLabel() {
         // Add version label
         let versionLabel = UILabel(frame: CGRect(x: view.bounds.width - 120, y: 20, width: 100, height: 30))
-        versionLabel.text = "v0.02"
+        versionLabel.text = "v0.03 [Timecode, Buttons]"
         versionLabel.textColor = .black
         versionLabel.font = UIFont.systemFont(ofSize: 14)
         versionLabel.textAlignment = .right
@@ -163,12 +169,53 @@ class ViewController: UIViewController {
             ]
             
             audioRecorder = try AVAudioRecorder(url: audioURL!, settings: audioSettings)
+            audioRecorder?.isMeteringEnabled = true
+            audioRecorder?.delegate = self
+            // Start updating the levels
+            startUpdatingLevels()
             audioRecorder?.prepareToRecord()
             
         } catch {
             // Handle audio session or recorder setup error
             print("Error setting up audio session/recorder: \(error.localizedDescription)")
         }
+    }
+    
+    //MARK: - AUDIO LEVEL SETUP
+    private func startUpdatingLevels() {
+        levelTimer = Timer.scheduledTimer(timeInterval: 0.05, target: self, selector: #selector(updateAudioLevels), userInfo: nil, repeats: true)
+    }
+        
+    @objc private func updateAudioLevels() {
+        guard let recorder = audioRecorder else { return }
+
+        recorder.updateMeters()
+
+        // Get the current levels, not the max
+        let leftChannelLevel = levelFromPower(power: recorder.averagePower(forChannel: 0))
+        let rightChannelLevel = levelFromPower(power: recorder.averagePower(forChannel: 1))
+
+        audioLevelMeter.setLevels(left: leftChannelLevel, right: rightChannelLevel)
+    }
+
+    
+    private func levelFromPower(power: Float) -> CGFloat {
+        // Typical range is from -80 dB to 0 dB
+        let minDb: Float = -80.0
+        let maxDb: Float = 0.0
+        
+        if power < minDb {
+            return 0.0
+        } else if power >= maxDb {
+            return 1.0
+        } else {
+            return CGFloat((power - minDb) / (maxDb - minDb))
+        }
+    }
+    
+    private func getDocumentsDirectory() -> URL {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths[0]
     }
     // MARK: - Setup Timer
     private func setupElapsedTimeLabel() {
@@ -210,6 +257,36 @@ class ViewController: UIViewController {
         updateElapsedTimeLabel()
     }
     
+    // MARK: - Audio Level Meter
+    private func setupAudioLevelMeter() {
+        // Position and size the meter between the left edge and the record button
+        let meterWidth: CGFloat = 150
+        let meterHeight: CGFloat = 200
+        let meterX: CGFloat = 20
+        let meterY: CGFloat = view.bounds.midY - meterHeight / 2
+        
+        audioLevelMeter = DualChannelAudioLevelMeter(frame: CGRect(x: meterX, y: meterY, width: meterWidth, height: meterHeight))
+        view.addSubview(audioLevelMeter)
+    }
+    
+    // MARK: - AVAudioRecorderDelegate
+        
+        func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+            // Handle successful completion of recording
+            if flag {
+                print("Recording finished successfully")
+            } else {
+                print("Recording failed")
+            }
+        }
+        
+        func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+            // Handle encoding error
+            if let error = error {
+                print("Recording error occurred: \(error)")
+            }
+        }
+
     // MARK: - Color Change Methods
 
     private func setTimecodeColorToRed() {
@@ -571,5 +648,53 @@ class AudioMeterView: UIView {
             meterPath.addLine(to: CGPoint(x: meterX, y: meterY + levelHeight))
             meterPath.close()
             meterPath.fill()
+    }
+}
+
+// MARK: - Dual Channel Audio Level Meter
+class DualChannelAudioLevelMeter: UIView {
+    private var leftLevel: CGFloat = 0.0
+    private var rightLevel: CGFloat = 0.0
+    
+    private let numberOfSegments: Int = 20 // You can adjust this for more or fewer segments
+
+    func setLevels(left: CGFloat, right: CGFloat) {
+        self.leftLevel = left
+        self.rightLevel = right
+        setNeedsDisplay() // Request a redraw
+    }
+    
+    override func draw(_ rect: CGRect) {
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+        context.clear(rect)
+
+        let segmentWidth = rect.width / 2
+        let segmentHeight = rect.height / CGFloat(numberOfSegments)
+
+        // Draw left channel in green
+        for i in 0..<numberOfSegments {
+            let y = rect.height - CGFloat(i + 1) * segmentHeight
+            let colorIntensity = CGFloat(i) / CGFloat(numberOfSegments)
+            let color = UIColor(red: 0, green: colorIntensity, blue: 0, alpha: 1.0) // Shades of green
+            
+            color.setFill()
+            if CGFloat(i) / CGFloat(numberOfSegments) < leftLevel {
+                let barRect = CGRect(x: 0, y: y, width: segmentWidth, height: segmentHeight)
+                context.fill(barRect)
+            }
+        }
+
+        // Draw right channel in green
+        for i in 0..<numberOfSegments {
+            let y = rect.height - CGFloat(i + 1) * segmentHeight
+            let colorIntensity = CGFloat(i) / CGFloat(numberOfSegments)
+            let color = UIColor(red: 0, green: colorIntensity, blue: 0, alpha: 1.0) // Shades of green
+            
+            color.setFill()
+            if CGFloat(i) / CGFloat(numberOfSegments) < rightLevel {
+                let barRect = CGRect(x: segmentWidth, y: y, width: segmentWidth, height: segmentHeight)
+                context.fill(barRect)
+            }
+        }
     }
 }
